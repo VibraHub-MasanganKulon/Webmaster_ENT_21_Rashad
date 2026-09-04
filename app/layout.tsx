@@ -6,8 +6,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "TailNews - Portal Berita Terpercaya",
-  description: "Informasi terkini, akurat, dan berimbang.",
+  title: "HawhoopNews - Portal Doksli",
+  description: "Informasi terkini, akurat, berimbang, dan timpaan selalu ready.",
 };
 
 export default function RootLayout({

@@ -1,40 +1,142 @@
-<<<<<<< HEAD
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HawhoopNews - Portal Berita Modern
 
-## Getting Started
+HawhoopNews adalah platform portal berita modern yang dibangun menggunakan **Next.js 14+ (App Router)**. Project ini dirancang untuk performa tinggi, skalabilitas, dan pengalaman pengguna yang mulus, baik bagi pembaca maupun administrator konten.
 
-First, run the development server:
+Sistem ini dilengkapi dengan panel administrasi yang aman, manajemen media terintegrasi, serta optimasi SEO untuk distribusi konten berita.
+
+## 🚀 Tech Stack
+
+- **Framework:** Next.js 16.3.4 (Turbopack)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS
+- **Database:** PostgreSQL (Vercel Postgres)
+- **ORM:** Prisma
+- **Authentication:** NextAuth.js (v5 / Auth.js)
+- **Storage:** Vercel Blob (untuk gambar & media)
+- **Caching & Session:** Redis (Upstash) & Vercel KV
+- **Validation:** Zod
+
+---
+
+## 📋 Prasyarat
+
+Sebelum memulai, pastikan Anda telah menginstal:
+- [Node.js](https://nodejs.org/) (versi 18.x atau lebih baru)
+- [npm](https://www.npmjs.com/), [yarn](https://yarnpkg.com/), atau [pnpm](https://pnpm.io/)
+- Akun [Vercel](https://vercel.com/) (untuk Blob, KV, dan Postgres)
+- Akun [Upstash](https://upstash.com/) (untuk Redis)
+
+---
+
+## ⚙️ Tahapan Instalasi
+
+Ikuti langkah-langkah berikut untuk menyiapkan lingkungan development:
+
+### 1. Clone Repository
+```bash
+git clone https://github.com/username-kamu/hawhoop-news.git
+cd hawhoop-news
+```
+### 2. Install Dependencies
+```bash
+npm install
+yarn install
+pnpm install
+```
+
+### 3. Konfigurasi Environment Variables
+Buat file `.env.local` di root directory dan salin variabel berikut. Pastikan Anda sudah membuat layanan di dashboard Vercel/Upstash untuk mendapatkan nilai-nilai ini.
+
+```bash
+# --- Database (Vercel Postgres) ---
+POSTGRES_URL="postgresql://..."
+POSTGRES_PRISMA_URL="postgresql://..."
+POSTGRES_URL_NON_POOLING="postgresql://..."
+POSTGRES_USER="..."
+POSTGRES_HOST="..."
+POSTGRES_PASSWORD="..."
+POSTGRES_DATABASE="..."
+
+# --- Authentication (NextAuth) ---
+AUTH_SECRET="generate-random-string-min-32-chars" # Gunakan: npx auth secret
+AUTH_TRUST_HOST=true
+
+# --- Storage (Vercel Blob) ---
+BLOB_READ_WRITE_TOKEN="vercel_blob_rw_..."
+
+# --- Caching & Session (Redis / Upstash) ---
+KV_REST_API_URL="https://..."
+KV_REST_API_TOKEN="..."
+UPSTASH_REDIS_REST_URL="https://..."
+UPSTASH_REDIS_REST_TOKEN="..."
+
+# --- App Config ---
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+JWT_SECRET="your-super-secret-jwt-key-for-admin-session"
+```
+### 4. Setup Database & Generate Prisma Client
+Jalankan perintah berikut untuk menyesuaikan skema database dan menghasilkan client Prisma:
+
+```bash
+npx prisma generate
+npx prisma db push
+```
+
+(Opsional) Jika ingin mengisi data awal (seeder):
+
+```bash
+npx prisma db seed
+```
+
+## Tahapan Menjalankan
+### Development Mode
+Menjalankan server development dengan Turbopack (Hot Module Replacement aktif):
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Akses aplikasi di browser: http://localhost:3000
+Akses Admin Panel: http://localhost:3000/admin
+### Production Build
+Untuk membangun dan menjalankan versi produksi secara lokal:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+npm run start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Struktur Folder Utama
 
-## Learn More
+```bash
+├── app/
+│   ├── (admin)/          # Route group khusus Admin Panel
+│   │   ├── admin/        # Halaman dashboard, posts, settings
+│   │   └── layout.tsx    # Layout admin (Sidebar + Header)
+│   ├── (public)/         # Route group untuk Publik
+│   │   ├── berita/[slug] # Halaman detail berita (Dynamic Route)
+│   │   └── page.tsx      # Homepage
+│   ├── api/              # API Routes (Auth, Posts, Upload)
+│   └── layout.tsx        # Root Layout
+── components/           # UI Components (Reusable)
+├── lib/                  # Utilities (Prisma, Session, Auth)
+├── services/             # Business Logic & DB Queries
+├── prisma/               # Schema Database & Migrations
+└── public/               # Static Assets
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Keamanan & Fitur Admin
+- Role-Based Access Control (RBAC): Hanya user dengan role super_admin yang dapat mengakses /admin/*.
+- Session Management: Menggunakan HTTP-Only Cookies + JWT via Redis/KV untuk keamanan maksimal.
+- Media Handling: Upload gambar langsung ke Vercel Blob dengan validasi tipe file dan ukuran.
+- Input Validation: Semua input form divalidasi menggunakan Zod sebelum diproses ke database.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 🤝 Kontribusi
+Jika ingin berkontribusi, silakan buat Pull Request atau buka Issue untuk melaporkan bug atau meminta fitur baru.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## License
 
-## Deploy on Vercel
+Project ini dibawah lisensi dari MIT License - lihat [![License: MIT](https://shields.io)](LICENSE) file untuk mengetahui lebih alnjut.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-=======
-# cms-news-ent
->>>>>>> 52e59c24d5ddc86934d02aeef1c636495a1ede55
+

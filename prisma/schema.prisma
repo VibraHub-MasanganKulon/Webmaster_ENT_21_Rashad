@@ -1,0 +1,102 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
+  directUrl = env("POSTGRES_URL_NON_POOLING")
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // super_admin, editor, copywriter
+  description String?
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  roleId       Int      @map("role_id")
+  role         Role     @relation(fields: [roleId], references: [id])
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  posts        Post[]
+  mediaUploads Media[]
+
+  @@map("users")
+}
+
+model Media {
+  id                   String   @id @default(uuid())
+  uploadedBy           String   @map("uploaded_by")
+  uploader             User     @relation(fields: [uploadedBy], references: [id])
+  fileName             String   @map("file_name")
+  fileUrl              String   @map("file_url")
+  mediaType            String   @map("media_type") // image, video
+  mimeType             String   @map("mime_type")
+  fileSizeBytes        BigInt   @map("file_size_bytes")
+  videoDurationSeconds Int?     @map("video_duration_seconds")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  postMedia   PostMedia[]
+  featuredFor Post[]      @relation("FeaturedImage")
+
+  @@index([mediaType])
+  @@map("media_library")
+}
+
+model Post {
+  id              String    @id @default(uuid())
+  authorId        String    @map("author_id")
+  author          User      @relation(fields: [authorId], references: [id])
+  title           String
+  slug            String    @unique
+  caption         String?
+  contentText     String?   @map("content_text") @db.Text
+  featuredImageId String?   @map("featured_image_id")
+  featuredImage   Media?    @relation("FeaturedImage", fields: [featuredImageId], references: [id])
+  status          String    @default("draft") // draft, published, scheduled
+  viewCount       Int       @default(0) @map("view_count")
+  publishedAt     DateTime? @map("published_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  media  PostMedia[]
+  clicks PostClick[]
+
+  @@index([status, publishedAt])
+  @@map("posts")
+}
+
+model PostMedia {
+  id          BigInt  @id @default(autoincrement())
+  postId      String  @map("post_id")
+  post        Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  mediaId     String  @map("media_id")
+  media       Media   @relation(fields: [mediaId], references: [id])
+  sortOrder   Int     @default(0) @map("sort_order")
+  subtitleUrl String? @map("subtitle_url")
+
+  @@index([postId])
+  @@map("post_media")
+}
+
+model PostClick {
+  id        BigInt   @id @default(autoincrement())
+  postId    String   @map("post_id")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent") @db.Text
+  clickedAt DateTime @default(now()) @map("clicked_at")
+
+  @@index([postId, clickedAt])
+  @@map("post_clicks")
+}   

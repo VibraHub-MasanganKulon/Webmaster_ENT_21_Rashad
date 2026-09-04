@@ -1,116 +1,162 @@
-'use client';
+'use client'
 
-import Link from 'next/link';
-import React, { useState, ChangeEvent, FormEvent } from 'react';
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import React, { useState, ChangeEvent, FormEvent } from 'react'
+import MediaPickerModal, { PickedMedia } from '@/components/admin/MediaPickerModal'
 
-// 1. Definisikan Tipe Data untuk State Form
-type MediaFormat = 'image' | 'video' | 'hybrid';
+type MediaFormat = 'image' | 'video' | 'hybrid'
 
 interface PostFormData {
-  title: string;
-  slug: string;
-  caption: string;
-  contentText: string;
-  mediaFormat: MediaFormat;
-  videoUrl: string;
-  categoryId: string;
-  tags: string;
+  title: string
+  slug: string
+  caption: string
+  contentText: string
+  mediaFormat: MediaFormat
 }
 
 export default function CreatePostPage() {
-  // 2. State Management untuk Form Utama
+  const router = useRouter()
+
   const [formData, setFormData] = useState<PostFormData>({
     title: '',
     slug: '',
     caption: '',
     contentText: '',
     mediaFormat: 'image',
-    videoUrl: '',
-    categoryId: '',
-    tags: '',
-  });
+  })
 
-  // State tambahan untuk tracking loading state saat submit
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  // Media dipilih dari Media Library (bukan upload langsung di form ini)
+  const [selectedImages, setSelectedImages] = useState<PickedMedia[]>([])
+  const [selectedVideos, setSelectedVideos] = useState<PickedMedia[]>([])
+  const [featuredImageId, setFeaturedImageId] = useState<string | null>(null)
 
-  // 3. Handler Fungsi Input Dinamis
+  const [pickerOpen, setPickerOpen] = useState<'image' | 'video' | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
+
   const handleInputChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
-    const { name, value } = e.target;
-    
+    const { name, value } = e.target
+
     setFormData((prev) => {
-      const updated = { ...prev, [name]: value };
-      
-      // Auto-generate slug sederhana jika yang diubah adalah judul berita
+      const updated = { ...prev, [name]: value }
       if (name === 'title') {
         updated.slug = value
           .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, '') // Hapus karakter non-alphanumeric
-          .replace(/\s+/g, '-');        // Ganti spasi dengan tanda hubung
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
       }
-      
-      return updated;
-    });
-  };
+      return updated
+    })
+  }
 
-  const handleFormatChange = (format: MediaFormat) => {
-    setFormData((prev) => ({ ...prev, mediaFormat: format }));
-  };
+  function handleFormatChange(format: MediaFormat) {
+    setFormData((prev) => ({ ...prev, mediaFormat: format }))
+  }
 
-  // 4. Handler Kirim Data (Submit ke API Endpoint posts Anda)
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  function handleImagesPicked(items: PickedMedia[]) {
+    setSelectedImages(items)
+    // gambar pertama otomatis jadi featured image kalau belum ada yang dipilih
+    if (items.length > 0 && !featuredImageId) {
+      setFeaturedImageId(items[0].id)
+    }
+  }
+
+  function removeImage(id: string) {
+    setSelectedImages((prev) => prev.filter((i) => i.id !== id))
+    if (featuredImageId === id) setFeaturedImageId(null)
+  }
+
+  function removeVideo(id: string) {
+    setSelectedVideos((prev) => prev.filter((i) => i.id !== id))
+  }
+
+  async function submitPost(status: 'draft' | 'published') {
+    setErrorMsg('')
+
+    if (!formData.title || !formData.contentText) {
+      setErrorMsg('Judul dan konten wajib diisi.')
+      return
+    }
+
+    setIsSubmitting(true)
+
+    // Gabungkan gambar (selain featured) + video jadi post_media, urutan = sort_order
+    const galleryImages = selectedImages.filter((img) => img.id !== featuredImageId)
+    const mediaItems = [
+      ...galleryImages.map((m) => ({ mediaId: m.id })),
+      ...selectedVideos.map((m) => ({ mediaId: m.id })),
+    ]
 
     try {
-      // Sesuai bagan gambar Anda, ini akan memicu route: api/posts/route.ts
       const response = await fetch('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
+        body: JSON.stringify({
+          title: formData.title,
+          caption: formData.caption || null,
+          contentText: formData.contentText,
+          status,
+          featuredImageId,
+          mediaItems,
+        }),
+      })
 
-      if (!response.ok) throw new Error('Gagal menyimpan berita');
-      
-      alert('Berita berhasil dipublikasikan!');
-      // Anda bisa menambahkan router.push('/admin/posts') di sini jika memakai useRouter()
+      if (!response.ok) {
+        const data = await response.json()
+        throw new Error(data.error || 'Gagal menyimpan berita')
+      }
+
+      router.push('/admin/posts')
+      router.refresh()
     } catch (error) {
-      console.error(error);
-      alert('Terjadi kesalahan saat menyimpan data.');
+      setErrorMsg(error instanceof Error ? error.message : 'Terjadi kesalahan.')
     } finally {
-      setIsSubmitting(false);
+      setIsSubmitting(false)
     }
-  };
+  }
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    submitPost('published')
+  }
+
+  const showImageSection = formData.mediaFormat === 'image' || formData.mediaFormat === 'hybrid'
+  const showVideoSection = formData.mediaFormat === 'video' || formData.mediaFormat === 'hybrid'
 
   return (
     <form onSubmit={handleSubmit} className="p-6 bg-slate-50 min-h-screen">
       {/* Top Navigation & Action Panel */}
       <div className="flex justify-between items-center mb-8 border-b border-slate-200 pb-5">
         <div className="flex items-center gap-3">
-            <Link 
-                href="/admin/posts"
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-colors inline-flex items-center justify-center"
-                >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-            </Link>
+          <Link
+            href="/admin/posts"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-colors inline-flex items-center justify-center"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+          </Link>
           <div>
             <h1 className="text-xl font-bold text-slate-900">Buat Berita Baru</h1>
-            <p className="text-xs text-slate-500">Isi data teks dan sematkan file multimedia Anda.</p>
+            <p className="text-xs text-slate-500">
+              Pilih gambar/video dari Media Library — bukan upload manual di sini.
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            type="button" 
+          <button
+            type="button"
+            onClick={() => submitPost('draft')}
             className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors"
             disabled={isSubmitting}
           >
             Simpan Draft
           </button>
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-sm font-semibold rounded-lg shadow-sm transition-colors"
             disabled={isSubmitting}
           >
@@ -119,187 +165,229 @@ export default function CreatePostPage() {
         </div>
       </div>
 
+      {errorMsg && (
+        <div className="mb-6 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-600">
+          {errorMsg}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* KOLOM KIRI (70%): Area Konten Utama */}
+        {/* KOLOM KIRI (70%) */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* Input Judul */}
+          {/* Judul */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <label className="block text-sm font-semibold text-slate-700 mb-2">Judul Utama Berita</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               name="title"
               value={formData.title}
               onChange={handleInputChange}
               required
-              placeholder="Masukkan judul berita yang menarik perhatian..." 
-              className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-base font-medium focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all" 
+              placeholder="Masukkan judul berita yang menarik perhatian..."
+              className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-base font-medium focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all"
             />
           </div>
 
-          {/* Input Caption Singkat */}
+          {/* Caption */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Caption Singkat (Untuk Feeds / Sosmed)</label>
-            <textarea 
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Caption Singkat</label>
+            <textarea
               name="caption"
               rows={3}
               value={formData.caption}
               onChange={handleInputChange}
-              placeholder="Tulis caption singkat atau ringkasan berita di sini..." 
+              placeholder="Tulis caption singkat atau ringkasan berita di sini..."
               className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all"
-            ></textarea>
+            />
           </div>
 
-          {/* Selector Tipe Media Berita Dinamis */}
+          {/* Format Media */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <label className="block text-sm font-semibold text-slate-700 mb-3">Format Lampiran Media</label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              
-              {/* Pilihan: Teks + Gambar */}
-              <button
-                type="button"
-                onClick={() => handleFormatChange('image')}
-                className={`flex items-center justify-between p-3 border rounded-xl transition-all ${
-                  formData.mediaFormat === 'image' 
-                    ? 'border-blue-500 bg-blue-50/40 text-blue-700' 
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span className="text-sm font-medium flex items-center gap-2">🖼️ Teks + Gambar</span>
-                <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.mediaFormat === 'image' ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
-                  {formData.mediaFormat === 'image' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-                </span>
-              </button>
-
-              {/* Pilihan: Teks + Video */}
-              <button
-                type="button"
-                onClick={() => handleFormatChange('video')}
-                className={`flex items-center justify-between p-3 border rounded-xl transition-all ${
-                  formData.mediaFormat === 'video' 
-                    ? 'border-blue-500 bg-blue-50/40 text-blue-700' 
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span className="text-sm font-medium flex items-center gap-2">🎥 Teks + Video</span>
-                <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.mediaFormat === 'video' ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
-                  {formData.mediaFormat === 'video' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-                </span>
-              </button>
-
-              {/* Pilihan: Hybrid */}
-              <button
-                type="button"
-                onClick={() => handleFormatChange('hybrid')}
-                className={`flex items-center justify-between p-3 border rounded-xl transition-all ${
-                  formData.mediaFormat === 'hybrid' 
-                    ? 'border-blue-500 bg-blue-50/40 text-blue-700' 
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <span className="text-sm font-medium flex items-center gap-2">🧬 Hybrid (Keduanya)</span>
-                <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${formData.mediaFormat === 'hybrid' ? 'border-blue-600 bg-blue-600' : 'border-slate-300'}`}>
-                  {formData.mediaFormat === 'hybrid' && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
-                </span>
-              </button>
+              {(['image', 'video', 'hybrid'] as MediaFormat[]).map((format) => (
+                <button
+                  key={format}
+                  type="button"
+                  onClick={() => handleFormatChange(format)}
+                  className={`flex items-center justify-between p-3 border rounded-xl transition-all ${
+                    formData.mediaFormat === format
+                      ? 'border-blue-500 bg-blue-50/40 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <span className="text-sm font-medium flex items-center gap-2">
+                    {format === 'image' && '🖼️ Teks + Gambar'}
+                    {format === 'video' && '🎥 Teks + Video'}
+                    {format === 'hybrid' && '🧬 Hybrid (Keduanya)'}
+                  </span>
+                  <span
+                    className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                      formData.mediaFormat === format ? 'border-blue-600 bg-blue-600' : 'border-slate-300'
+                    }`}
+                  >
+                    {formData.mediaFormat === format && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                    )}
+                  </span>
+                </button>
+              ))}
             </div>
 
-            {/* AREA MULTIMEDIA INPUT (Me-render form secara kondisional berdasarkan state format) */}
             <div className="mt-6 pt-6 border-t border-slate-100 space-y-4">
-              
-              {/* Form Gambar: Ditampilkan jika memilih 'image' atau 'hybrid' */}
-              {(formData.mediaFormat === 'image' || formData.mediaFormat === 'hybrid') && (
-                <div className="animate-fadeIn">
-                  <span className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Galeri Foto Berita</span>
-                  <button 
-                    type="button" 
-                    className="w-full py-8 border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/20 rounded-xl transition-all flex flex-col items-center justify-center gap-2 group"
-                  >
-                    <svg className="w-8 h-8 text-slate-400 group-hover:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-sm text-slate-500 group-hover:text-blue-600 font-medium">Klik untuk upload gambar</span>
-                    <span className="text-xs text-slate-400">PNG, JPG hingga 10MB</span>
-                  </button>
+              {/* Gambar — dari Media Library */}
+              {showImageSection && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Galeri Foto (dari Media Library)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen('image')}
+                      className="text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      + Pilih Gambar
+                    </button>
+                  </div>
+
+                  {selectedImages.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen('image')}
+                      className="w-full py-8 border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/20 rounded-xl transition-all flex flex-col items-center justify-center gap-2 group"
+                    >
+                      <span className="text-sm text-slate-500 group-hover:text-blue-600 font-medium">
+                        Klik untuk pilih gambar dari Media Library
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="grid grid-cols-4 gap-2">
+                      {selectedImages.map((img) => (
+                        <div key={img.id} className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img.fileUrl} alt={img.fileName} className="h-20 w-full rounded-lg object-cover" />
+                          {img.id === featuredImageId && (
+                            <span className="absolute left-1 top-1 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] text-white">
+                              Featured
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeImage(img.id)}
+                            className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Form Video: Ditampilkan jika memilih 'video' atau 'hybrid' */}
-              {(formData.mediaFormat === 'video' || formData.mediaFormat === 'hybrid') && (
-                <div className="animate-fadeIn">
-                  <span className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">URL Video</span>
-                  <input 
-                    type="url"
-                    name="videoUrl"
-                    value={formData.videoUrl}
-                    onChange={handleInputChange}
-                    placeholder="https://youtube.com/watch?v=... atau URL video lainnya"
-                    className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all"
-                  />
-                  <p className="text-xs text-slate-400 mt-2">Support: YouTube, Vimeo, atau direct URL</p>
+              {/* Video — dari Media Library */}
+              {showVideoSection && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="block text-xs font-bold uppercase tracking-wider text-slate-400">
+                      Video (dari Media Library)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen('video')}
+                      className="text-xs font-medium text-blue-600 hover:underline"
+                    >
+                      + Pilih Video
+                    </button>
+                  </div>
+
+                  {selectedVideos.length === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setPickerOpen('video')}
+                      className="w-full py-8 border-2 border-dashed border-slate-200 hover:border-blue-400 bg-slate-50/50 hover:bg-blue-50/20 rounded-xl transition-all flex flex-col items-center justify-center gap-2 group"
+                    >
+                      <span className="text-sm text-slate-500 group-hover:text-blue-600 font-medium">
+                        Klik untuk pilih video dari Media Library
+                      </span>
+                    </button>
+                  ) : (
+                    <ul className="space-y-2">
+                      {selectedVideos.map((vid) => (
+                        <li
+                          key={vid.id}
+                          className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                        >
+                          <span>🎬 {vid.fileName}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeVideo(vid.id)}
+                            className="text-red-500 hover:underline text-xs"
+                          >
+                            Hapus
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Input Content Text */}
+          {/* Konten */}
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <label className="block text-sm font-semibold text-slate-700 mb-2">Konten Lengkap</label>
-            <textarea 
+            <textarea
               name="contentText"
               rows={10}
               value={formData.contentText}
               onChange={handleInputChange}
-              placeholder="Tulis konten berita lengkap di sini..." 
+              required
+              placeholder="Tulis konten berita lengkap di sini..."
               className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all"
-            ></textarea>
-          </div>
-
-        </div>
-
-        {/* KOLOM KANAN (30%): Sidebar Settings */}
-        <div className="space-y-6">
-          
-          {/* Kategori */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Kategori</label>
-            <select 
-              name="categoryId"
-              value={formData.categoryId}
-              onChange={handleInputChange}
-              className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all"
-            >
-              <option value="">Pilih Kategori</option>
-              <option value="1">Teknologi</option>
-              <option value="2">Bisnis</option>
-              <option value="3">Lifestyle</option>
-              <option value="4">Olahraga</option>
-            </select>
-          </div>
-
-          {/* Tags */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Tags</label>
-            <input 
-              type="text" 
-              name="tags"
-              value={formData.tags}
-              onChange={handleInputChange}
-              placeholder="teknologi, startup, digital (pisahkan dengan koma)" 
-              className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all" 
             />
           </div>
+        </div>
 
-          {/* Slug Preview */}
+        {/* KOLOM KANAN (30%) */}
+        <div className="space-y-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <label className="block text-sm font-semibold text-slate-700 mb-2">Slug URL</label>
             <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-600 font-mono">
               {formData.slug || 'judul-berita-anda'}
             </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Preview saja — slug final & keunikannya ditentukan server saat disimpan.
+            </p>
           </div>
 
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 text-xs text-slate-500 space-y-2">
+            <p className="font-semibold text-slate-700">Catatan</p>
+            <p>
+              Kategori & tags belum tersedia karena belum ada di skema database. Kalau
+              dibutuhkan, perlu migration tambahan (tabel <code>categories</code>).
+            </p>
+            <p>Penulis (author) otomatis diambil dari akun yang sedang login.</p>
+          </div>
         </div>
       </div>
+
+      <MediaPickerModal
+        mediaType="image"
+        isOpen={pickerOpen === 'image'}
+        onClose={() => setPickerOpen(null)}
+        onConfirm={handleImagesPicked}
+        multiple
+      />
+      <MediaPickerModal
+        mediaType="video"
+        isOpen={pickerOpen === 'video'}
+        onClose={() => setPickerOpen(null)}
+        onConfirm={setSelectedVideos}
+        multiple
+      />
     </form>
-  );
+  )
 }

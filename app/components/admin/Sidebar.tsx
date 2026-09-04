@@ -63,7 +63,7 @@ export default function Sidebar() {
       
       {/* Logo Area */}
       <div className="p-6 border-b border-slate-800">
-        <h1 className="text-xl font-bold text-blue-400">NewsAdmin</h1>
+        <h1 className="text-xl font-bold text-blue-400">HawhoopAdmin</h1>
         <p className="text-xs text-slate-400 mt-1">Management System</p>
       </div>
 

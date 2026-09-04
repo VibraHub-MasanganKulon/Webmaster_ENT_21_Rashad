@@ -1,10 +1,10 @@
-// prisma/seed.ts
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
-function slugify(title: string): string {
-  return title
+
+function slugify(text: string): string {
+  return text
     .toLowerCase()
     .trim()
     .replace(/[^\w\s-]/g, '')
@@ -12,11 +12,21 @@ function slugify(title: string): string {
 }
 
 async function main() {
+  // --- 1. Roles WAJIB dibuat dulu sebelum dipakai di bawah ---
+  const roleNames = ['super_admin', 'editor', 'copywriter']
+  for (const name of roleNames) {
+    await prisma.role.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    })
+  }
+
   const superAdminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'super_admin' } })
   const editorRole = await prisma.role.findUniqueOrThrow({ where: { name: 'editor' } })
   const copywriterRole = await prisma.role.findUniqueOrThrow({ where: { name: 'copywriter' } })
 
-  // --- Users ---
+  // --- 2. Users ---
   const defaultPasswordHash = await bcrypt.hash('ChangeMe123!', 10)
 
   const superAdmin = await prisma.user.upsert({
@@ -52,70 +62,65 @@ async function main() {
     },
   })
 
-  // --- Sample Posts (featuredImageId sengaja null dulu) ---
+  // --- 3. Categories ---
+  const categoryNames = ['Teknologi', 'Bisnis', 'Olahraga', 'Lifestyle']
+  for (const name of categoryNames) {
+    await prisma.category.upsert({
+      where: { name },
+      update: {},
+      create: { name, slug: slugify(name) },
+    })
+  }
+  const teknologiCategory = await prisma.category.findUniqueOrThrow({ where: { name: 'Teknologi' } })
+
+  // --- 4. Sample Posts (featuredImageId null dulu — belum ada media) ---
   const samplePosts = [
     {
       title: 'Pemerintah Umumkan Kebijakan Baru Soal Transportasi Publik',
       caption: 'Rencana perluasan jalur transportasi umum di kota besar',
       contentText:
-        'Pemerintah tengah menyusun rencana perluasan jalur transportasi publik di sejumlah kota besar untuk mengurangi kemacetan. Rencana ini mencakup penambahan armada dan perluasan rute yang menjangkau kawasan pinggiran.',
+        'Pemerintah tengah menyusun rencana perluasan jalur transportasi publik di sejumlah kota besar untuk mengurangi kemacetan.',
       status: 'published',
       authorId: editor.id,
+      categoryId: teknologiCategory.id,
       publishedAt: new Date('2026-08-20T08:00:00Z'),
       viewCount: 1240,
     },
     {
-      title: 'Tim Nasional Menang Telak di Laga Persahabatan',
-      caption: 'Kemenangan meyakinkan jelang turnamen regional',
-      contentText:
-        'Tim nasional berhasil meraih kemenangan meyakinkan dalam laga persahabatan yang digelar akhir pekan lalu. Pelatih menyebut hasil ini sebagai modal positif menjelang turnamen regional mendatang.',
-      status: 'published',
-      authorId: copywriter.id,
-      publishedAt: new Date('2026-08-22T10:30:00Z'),
-      viewCount: 3021,
+      title: '[Draft] Analisis Tren Ekonomi Digital Kuartal Ini',
+      caption: null,
+      contentText: 'Draf analisis mengenai tren ekonomi digital masih dalam proses penyusunan.',
+      status: 'draft',
+      authorId: superAdmin.id,
+      categoryId: null,
+      publishedAt: null,
+      viewCount: 0,
     },
     {
       title: 'Startup Lokal Kembangkan Solusi Pertanian Berbasis Sensor',
       caption: null,
       contentText:
-        'Sebuah startup teknologi lokal memperkenalkan alat berbasis sensor yang membantu petani memantau kelembapan tanah secara real-time. Inovasi ini diharapkan dapat meningkatkan efisiensi penggunaan air di lahan pertanian.',
+        'Sebuah startup teknologi lokal memperkenalkan alat berbasis sensor untuk memantau kelembapan tanah secara real-time.',
       status: 'published',
-      authorId: editor.id,
+      authorId: copywriter.id,
+      categoryId: teknologiCategory.id,
       publishedAt: new Date('2026-08-25T14:00:00Z'),
       viewCount: 856,
-    },
-    {
-      title: 'Festival Kuliner Tahunan Kembali Digelar Bulan Depan',
-      caption: 'Ratusan tenant kuliner lokal akan berpartisipasi',
-      contentText:
-        'Festival kuliner tahunan dijadwalkan kembali digelar bulan depan dengan partisipasi ratusan tenant kuliner lokal. Panitia menyebut acara tahun ini akan menghadirkan lebih banyak zona interaktif untuk pengunjung.',
-      status: 'scheduled',
-      authorId: copywriter.id,
-      publishedAt: new Date('2026-09-15T09:00:00Z'),
-      viewCount: 0,
-    },
-    {
-      title: '[Draft] Analisis Tren Ekonomi Digital Kuartal Ini',
-      caption: null,
-      contentText:
-        'Draf analisis mengenai tren ekonomi digital masih dalam proses penyusunan, mencakup data pertumbuhan sektor e-commerce dan adopsi pembayaran digital di berbagai wilayah.',
-      status: 'draft',
-      authorId: superAdmin.id,
-      publishedAt: null,
-      viewCount: 0,
     },
   ]
 
   for (const post of samplePosts) {
+    const slug = slugify(post.title)
     await prisma.post.upsert({
-      where: { slug: slugify(post.title) },
+      where: { slug },
       update: {},
       create: {
         title: post.title,
-        slug: slugify(post.title),
+        slug,
         caption: post.caption,
         contentText: post.contentText,
-        featuredImageId: null, // sengaja null dulu, isi kalau media library sudah ada
+        featuredImageId: null,
+        categoryId: post.categoryId,
         status: post.status,
         authorId: post.authorId,
         publishedAt: post.publishedAt,
@@ -124,7 +129,7 @@ async function main() {
     })
   }
 
-  console.log('Seed selesai: roles, users, dan sample posts berhasil dibuat.')
+  console.log('Seed selesai: roles, users, categories, dan sample posts berhasil dibuat.')
 }
 
 main()
@@ -133,5 +138,3 @@ main()
     process.exit(1)
   })
   .finally(async () => await prisma.$disconnect())
-
-  

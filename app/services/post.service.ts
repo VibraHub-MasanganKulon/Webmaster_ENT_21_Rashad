@@ -35,6 +35,7 @@ export type CreatePostInput = {
   status: 'draft' | 'published' | 'scheduled'
   authorId: string
   featuredImageId?: string | null
+  categoryId?: number | null
   mediaItems?: PostMediaInput[] // gambar/video tambahan dari media library, urutan = sort_order
   publishedAt?: Date | null
 }
@@ -56,6 +57,7 @@ export async function createPostWithMedia(data: CreatePostInput) {
         status: data.status,
         authorId: data.authorId,
         featuredImageId: data.featuredImageId || null,
+        categoryId: data.categoryId || null,
         publishedAt:
           data.status === 'published' ? new Date() : data.publishedAt ?? null,
       },
@@ -82,6 +84,7 @@ export async function getAllPostsForAdmin() {
     include: {
       author: true,
       featuredImage: true,
+      category: true,
       media: { include: { media: true } },
     },
   })
@@ -93,6 +96,7 @@ export async function getPostByIdForAdmin(id: string) {
     include: {
       author: true,
       featuredImage: true,
+      category: true,
       media: { include: { media: true }, orderBy: { sortOrder: 'asc' } },
     },
   })
@@ -104,7 +108,7 @@ export async function getFeaturedPost() {
   return prisma.post.findFirst({
     where: { status: 'published' },
     orderBy: { publishedAt: 'desc' },
-    include: { featuredImage: true, author: true },
+    include: { featuredImage: true, author: true, category: true },
   })
 }
 
@@ -116,7 +120,7 @@ export async function getLatestPosts(limit = 8, excludeId?: string) {
     },
     orderBy: { publishedAt: 'desc' },
     take: limit,
-    include: { featuredImage: true, author: true },
+    include: { featuredImage: true, author: true, category: true },
   })
 }
 
@@ -127,6 +131,7 @@ export async function getPostBySlug(slug: string) {
       featuredImage: true,
       author: true,
       media: { orderBy: { sortOrder: 'asc' }, include: { media: true } },
+      category: true,
     },
   })
 }

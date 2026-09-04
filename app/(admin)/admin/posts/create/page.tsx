@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import React, { useState, ChangeEvent, FormEvent } from 'react'
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react'
 import MediaPickerModal, { PickedMedia } from '@/components/admin/MediaPickerModal'
 
 type MediaFormat = 'image' | 'video' | 'hybrid'
+
+type CategoryOption = { id: number; name: string }
 
 interface PostFormData {
   title: string
@@ -13,6 +15,7 @@ interface PostFormData {
   caption: string
   contentText: string
   mediaFormat: MediaFormat
+  categoryId: string
 }
 
 export default function CreatePostPage() {
@@ -24,7 +27,29 @@ export default function CreatePostPage() {
     caption: '',
     contentText: '',
     mediaFormat: 'image',
+    categoryId: '',
   })
+
+  const [categories, setCategories] = useState<CategoryOption[]>([])
+
+  useEffect(() => {
+    fetch('/api/categories')
+      .then((res) => res.json())
+      .then((data) => {
+        // Kalau API mengembalikan error object (mis. 401 Unauthorized),
+        // `data` bukan array — jangan langsung di-set, biar tidak bikin .map() crash
+        if (Array.isArray(data)) {
+          setCategories(data)
+        } else {
+          console.error('Respons /api/categories bukan array:', data)
+          setCategories([])
+        }
+      })
+      .catch((err) => {
+        console.error('Gagal fetch categories:', err)
+        setCategories([])
+      })
+  }, [])
 
   // Media dipilih dari Media Library (bukan upload langsung di form ini)
   const [selectedImages, setSelectedImages] = useState<PickedMedia[]>([])
@@ -36,7 +61,7 @@ export default function CreatePostPage() {
   const [errorMsg, setErrorMsg] = useState('')
 
   const handleInputChange = (
-    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target
 
@@ -100,6 +125,7 @@ export default function CreatePostPage() {
           contentText: formData.contentText,
           status,
           featuredImageId,
+          categoryId: formData.categoryId ? Number(formData.categoryId) : null,
           mediaItems,
         }),
       })
@@ -354,6 +380,28 @@ export default function CreatePostPage() {
         {/* KOLOM KANAN (30%) */}
         <div className="space-y-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <label className="block text-sm font-semibold text-slate-700 mb-2">Kategori</label>
+            <select
+              name="categoryId"
+              value={formData.categoryId}
+              onChange={handleInputChange}
+              className="w-full px-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 transition-all"
+            >
+              <option value="">Tanpa Kategori</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+            {categories.length === 0 && (
+              <p className="mt-2 text-xs text-slate-400">
+                Belum ada kategori. Tambahkan lewat menu Kategori dulu.
+              </p>
+            )}
+          </div>
+
+          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
             <label className="block text-sm font-semibold text-slate-700 mb-2">Slug URL</label>
             <div className="px-4 py-3 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-600 font-mono">
               {formData.slug || 'judul-berita-anda'}
@@ -365,10 +413,7 @@ export default function CreatePostPage() {
 
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 text-xs text-slate-500 space-y-2">
             <p className="font-semibold text-slate-700">Catatan</p>
-            <p>
-              Kategori & tags belum tersedia karena belum ada di skema database. Kalau
-              dibutuhkan, perlu migration tambahan (tabel <code>categories</code>).
-            </p>
+            <p>Tags belum tersedia karena belum ada di skema database.</p>
             <p>Penulis (author) otomatis diambil dari akun yang sedang login.</p>
           </div>
         </div>

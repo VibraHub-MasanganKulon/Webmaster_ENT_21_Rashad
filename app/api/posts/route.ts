@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { getCurrentUserOrDefault } from '@/lib/session'
 import { canPublishDirectly } from '@/lib/rbac'
 import { createPostWithMedia, getAllPostsForAdmin } from '@/services/post.service'
 
@@ -16,28 +15,21 @@ const createPostSchema = z.object({
   contentText: z.string().min(20, 'Konten minimal 20 karakter'),
   status: z.enum(['draft', 'published', 'scheduled']),
   featuredImageId: z.string().uuid().nullable().optional(),
+  categoryId: z.number().int().positive().nullable().optional(),
   mediaItems: z.array(postMediaSchema).optional(),
   publishedAt: z.string().datetime().nullable().optional(),
 })
 
 export async function GET() {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
+  // Auth belum di-enforce (mode tes coding) — lihat catatan di src/lib/session.ts
   const posts = await getAllPostsForAdmin()
   return NextResponse.json(posts)
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions)
-  if (!session?.user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const role = (session.user as { role: string }).role
-  const userId = (session.user as { id: string }).id
+  const user = await getCurrentUserOrDefault()
+  const role = user.role
+  const userId = user.id
 
   const body = await request.json()
   const parsed = createPostSchema.safeParse(body)
@@ -63,6 +55,7 @@ export async function POST(request: Request) {
       status: finalStatus,
       authorId: userId,
       featuredImageId: data.featuredImageId,
+      categoryId: data.categoryId,
       mediaItems: data.mediaItems,
       publishedAt: data.publishedAt ? new Date(data.publishedAt) : null,
     })

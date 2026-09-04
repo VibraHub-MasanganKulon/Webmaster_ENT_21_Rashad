@@ -19,11 +19,14 @@ interface PostDetail {
   media?: Array<{ mediaId: string; sortOrder: number; media: { url: string; type: string } }>
 }
 
+type CategoryOption = { id: number; name: string }
+
 export default function EditPostPage() {
   const params = useParams()
   const router = useRouter()
   const id = params.id as string
 
+  const [categories, setCategories] = useState<CategoryOption[]>([])
   const [formData, setFormData] = useState<Partial<PostDetail>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -46,6 +49,25 @@ export default function EditPostPage() {
     }
     fetchPost()
   }, [id])
+
+    useEffect(() => {
+      fetch('/api/categories')
+        .then((res) => res.json())
+        .then((data) => {
+          // Kalau API mengembalikan error object (mis. 401 Unauthorized),
+          // `data` bukan array — jangan langsung di-set, biar tidak bikin .map() crash
+          if (Array.isArray(data)) {
+            setCategories(data)
+          } else {
+            console.error('Respons /api/categories bukan array:', data)
+            setCategories([])
+          }
+        })
+        .catch((err) => {
+          console.error('Gagal fetch categories:', err)
+          setCategories([])
+        })
+    }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -165,9 +187,11 @@ export default function EditPostPage() {
               className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Pilih Kategori</option>
-              {/* Map kategori dari DB di sini jika ada endpoint kategori */}
-              <option value="1">Teknologi</option>
-              <option value="2">Bisnis</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
+              ))}
             </select>
           </div>
         </div>

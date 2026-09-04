@@ -128,10 +128,79 @@ export async function getPostBySlug(slug: string) {
   return prisma.post.findUnique({
     where: { slug },
     include: {
-      featuredImage: true,
       author: true,
       media: { orderBy: { sortOrder: 'asc' }, include: { media: true } },
       category: true,
     },
+  })
+}
+
+export type UpdatePostInput = {
+  title?: string
+  caption?: string | null
+  contentText?: string
+  status?: 'draft' | 'published' | 'scheduled'
+  featuredImageId?: string | null
+  categoryId?: number | null
+  mediaItems?: PostMediaInput[] // Jika dikirim, akan REPLACE semua media lama
+  publishedAt?: Date | null
+}
+
+export async function updatePostWithMedia(id: string, data: UpdatePostInput) {
+  return prisma.$transaction(async (tx) => {
+    // 1. Handle Slug jika judul berubah
+    let slugData = {}
+    if (data.title) {
+      const newSlug = await generateUniqueSlug(data.title)
+      slugData = { slug: newSlug }
+    }
+
+    // 2. Update data utama post
+    const updatedPost = await tx.post.update({
+      where: { id },
+      data: {
+        ...(data.title && { title: data.title }),
+        ...(data.caption !== undefined && { caption: data.caption }),
+        ...(data.contentText && { contentText: data.contentText }),
+        ...(data.status && { status: data.status }),
+        ...(data.featuredImageId !== undefined && { featuredImageId: data.featuredImageId }),
+        ...(data.categoryId !== undefined && { categoryId: data.categoryId }),
+        ...(data.publishedAt !== undefined && { publishedAt: data.publishedAt }),
+        ...slugData,
+        
+        // Auto-set publishedAt jika status berubah ke published
+        ...(data.status === 'published' && { publishedAt: new Date() }),
+      },
+    })
+
+    // 3. Sync Media Items (Delete old -> Create new)
+    if (data.mediaItems !== undefined) {
+      // Hapus semua relasi media lama untuk post ini
+      await tx.postMedia.deleteMany({ where: { postId: id } })
+
+      // Buat relasi baru jika ada
+      if (data.mediaItems.length > 0) {
+        await tx.postMedia.createMany({
+          data: data.mediaItems.map((item, index) => ({
+            postId: id,
+            mediaId: item.mediaId!,
+            sortOrder: index,
+            subtitleUrl: item.subtitleUrl ?? null,
+          })),
+        })
+      }
+    }
+
+    return updatedPost
+  })
+}
+
+export async function deletePost(id: string) {
+  return prisma.$transaction(async (tx) => {
+    // Hapus relasi media dulu (jika ada cascade delete di schema, baris ini opsional)
+    await tx.postMedia.deleteMany({ where: { postId: id } })
+    
+    // Hapus post utama
+    return tx.post.delete({ where: { id } })
   })
 }
